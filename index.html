@@ -1,9 +1,19 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>2023 cosas para el 2023… y para toda la vida</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0C0C0E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="La Lista">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400&display=swap" rel="stylesheet">
 <style>
@@ -95,7 +105,7 @@ button{font-family:inherit;cursor:pointer;}
   font-family:'Bricolage Grotesque',sans-serif;font-size:1.1rem;letter-spacing:.02em;
   cursor:pointer;color:var(--ink);
 }
-#topbar .brand .clap{width:30px;height:30px;flex:none;color:var(--yellow);}
+#topbar .brand .bucket-icon{width:30px;height:30px;flex:none;color:var(--yellow);}
 #topbar nav{display:flex;gap:4px;align-items:center;}
 #topbar nav a{
   font-family:'Space Grotesk',sans-serif;font-weight:700;
@@ -118,6 +128,14 @@ button{font-family:inherit;cursor:pointer;}
   color:var(--ink-dim);font-size:1rem;display:flex;align-items:center;justify-content:center;flex:none;
 }
 .backup-btn:hover{border-color:var(--cyan);color:var(--cyan);}
+.auth-btn{
+  font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:.72rem;letter-spacing:.03em;
+  padding:8px 14px;border-radius:16px;border:1px solid var(--line);background:transparent;color:var(--ink-dim);
+  display:flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.auth-btn:hover{border-color:var(--primary);color:var(--primary);}
+.auth-btn.signed-in{background:var(--c-viajes);border-color:var(--c-viajes);color:#fff;}
+.auth-btn.signed-in:hover{background:#3DD9F5;border-color:#3DD9F5;color:var(--bg);}
 #mobileMenuBtn{display:none;background:none;border:1px solid var(--ink-dim);border-radius:4px;padding:6px 10px;color:var(--ink);}
 @media (max-width:900px){
   #topbar nav{display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-2);flex-direction:column;padding:10px;border-bottom:1px solid var(--line);align-items:stretch;}
@@ -871,7 +889,12 @@ footer{padding:40px 24px;text-align:center;font-family:'Space Grotesk',sans-seri
 
 <header id="topbar">
   <div class="brand" onclick="go('landing')">
-    <svg class="clap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 10l1-4 15 3-1 4z"/><path d="M4 6l2.5 3M9 7l2.5 3M14 8l2.5 3"/><rect x="3" y="10" width="18" height="10" rx="1"/></svg>
+    <svg class="bucket-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7.5 7.5C7.5 3 16.5 3 16.5 7.5"/>
+      <ellipse cx="12" cy="8" rx="7" ry="1.4"/>
+      <path d="M5 8L7.3 20a1 1 0 0 0 1 .8h7.4a1 1 0 0 0 1-.8L19 8"/>
+      <path d="M9 12.2h6M9.4 15.4h5.2M9.8 18.6h4.4"/>
+    </svg>
     <span>LA LISTA</span>
   </div>
   <button id="mobileMenuBtn" onclick="document.getElementById('topnav').classList.toggle('open')">☰</button>
@@ -882,6 +905,7 @@ footer{padding:40px 24px;text-align:center;font-family:'Space Grotesk',sans-seri
     <a href="#" data-nav="achievements" onclick="go('achievements');return false;">Logros</a>
     <a href="#" data-nav="manifesto" onclick="go('manifesto');return false;">El Proyecto</a>
     <a href="#" data-nav="journal" onclick="go('journal');return false;">Blog Personal</a>
+    <button class="auth-btn" id="authBtn" onclick="handleAuthBtnClick()">Iniciar sesión con GitHub</button>
     <button class="progress-chip" id="navProgress" onclick="go('completed')" title="Ver todos los retos cumplidos">0 / 0</button>
   </nav>
 </header>
@@ -1431,6 +1455,121 @@ var progress = {};
 var countryProgress = {};
 var cwFilter = 'all';
 var journal = [];
+
+/* ================= SUPABASE (login + guardado en la nube) =================
+   Reemplaza supabaseUrl con la URL real de tu proyecto (Dashboard → Settings → API
+   → "Project URL", tiene forma https://xxxxxxxx.supabase.co). "https://supabase.co"
+   tal cual es solo el sitio de marketing de Supabase, no un proyecto — con ese valor
+   la conexión no va a funcionar, así que reemplázalo. */
+const supabaseUrl = 'https://supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkZG9haWxiaGhjbm5hcnpxdmJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5OTIyODMsImV4cCI6MjEwMjU2ODI4M30.q5WVwSUdBjQ7BJrlXaYn_OoK1GdoBdXzWix_Ih6xggs';
+
+var supabaseClient = null;
+var currentUser = null;
+if (supabaseKey.indexOf('PEGA_AQUÍ') === -1 && window.supabase) {
+  try{
+    supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+  }catch(e){ console.error('No se pudo inicializar Supabase:', e); }
+}
+
+async function signInWithGitHub(){
+  if(!supabaseClient){ alert('Falta configurar supabaseUrl y supabaseKey en el código.'); return; }
+  await supabaseClient.auth.signInWithOAuth({
+    provider: 'github',
+    options: { redirectTo: location.href.split('#')[0] }
+  });
+}
+async function signOutUser(){
+  if(!supabaseClient) return;
+  await supabaseClient.auth.signOut();
+  currentUser = null;
+  updateAuthUI();
+  showToast('Sesión cerrada — tu progreso sigue guardado en este navegador');
+}
+function handleAuthBtnClick(){
+  if(currentUser){
+    var ok = confirm('¿Cerrar sesión? Tu progreso seguirá disponible en este navegador, pero dejará de sincronizarse con la nube hasta que vuelvas a iniciar sesión.');
+    if(ok) signOutUser();
+  } else {
+    signInWithGitHub();
+  }
+}
+function updateAuthUI(){
+  var btn = document.getElementById('authBtn');
+  if(!btn) return;
+  if(currentUser){
+    var label = currentUser.user_metadata && (currentUser.user_metadata.user_name || currentUser.user_metadata.full_name);
+    btn.textContent = '☁️ ' + (label || 'Sesión iniciada');
+    btn.classList.add('signed-in');
+    btn.title = 'Sincronizado con la nube — clic para cerrar sesión';
+  } else {
+    btn.textContent = 'Iniciar sesión con GitHub';
+    btn.classList.remove('signed-in');
+    btn.title = '';
+  }
+}
+
+var TABLE_NAME = 'progreso_usuario';
+async function loadFromSupabase(){
+  if(!supabaseClient || !currentUser) return;
+  try{
+    var { data, error } = await supabaseClient
+      .from(TABLE_NAME)
+      .select('progreso')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if(error){ console.error(error); return; }
+    if(data && data.progreso){
+      var bundle = data.progreso;
+      if(bundle.progress) progress = bundle.progress;
+      if(bundle.journal) journal = bundle.journal;
+      if(bundle.countryProgress) countryProgress = bundle.countryProgress;
+      // guarda también una copia local, para que la app siga funcionando sin conexión
+      try{ await window.storage.set('progress', JSON.stringify(progress), false); }catch(e){}
+      try{ await window.storage.set('journal', JSON.stringify(journal), false); }catch(e){}
+      try{ await window.storage.set('countries', JSON.stringify(countryProgress), false); }catch(e){}
+      showToast('Progreso cargado desde la nube');
+    } else {
+      // primer inicio de sesión de este usuario: sube lo que ya tenía localmente
+      await saveToSupabase();
+    }
+    routeFromHash();
+  }catch(e){ console.error(e); }
+}
+var supabaseSaveTimer = null;
+function saveToSupabase(){
+  if(!supabaseClient || !currentUser) return;
+  clearTimeout(supabaseSaveTimer);
+  supabaseSaveTimer = setTimeout(async function(){
+    try{
+      var bundle = { progress: progress, journal: journal, countryProgress: countryProgress };
+      var { error } = await supabaseClient
+        .from(TABLE_NAME)
+        .upsert({ user_id: currentUser.id, progreso: bundle }, { onConflict: 'user_id' });
+      if(error) console.error('Error guardando en Supabase:', error);
+    }catch(e){ console.error(e); }
+  }, 600);
+}
+if(supabaseClient){
+  supabaseClient.auth.onAuthStateChange(function(event, session){
+    currentUser = session ? session.user : null;
+    updateAuthUI();
+    if(event === 'SIGNED_IN'){
+      if(location.hash.indexOf('access_token')>-1){
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+      loadFromSupabase();
+      go('landing');
+    }
+  });
+  supabaseClient.auth.getUser().then(function(res){
+    currentUser = res && res.data ? res.data.user : null;
+    updateAuthUI();
+    if(currentUser) loadFromSupabase();
+  });
+}
+
+
 var currentSection = null;
 var sectionFilter = 'all';
 var fullFilter = 'all';
@@ -1457,6 +1596,7 @@ function persistCountryProgress(){
   clearTimeout(saveCountryTimer);
   saveCountryTimer = setTimeout(async function(){
     try{ await window.storage.set('countries', JSON.stringify(countryProgress), false); }catch(e){}
+    saveToSupabase();
   }, 250);
 }
 var saveProgressTimer = null;
@@ -1464,10 +1604,12 @@ function persistProgress(){
   clearTimeout(saveProgressTimer);
   saveProgressTimer = setTimeout(async function(){
     try{ await window.storage.set('progress', JSON.stringify(progress), false); }catch(e){}
+    saveToSupabase();
   }, 250);
 }
 async function persistJournal(){
   try{ await window.storage.set('journal', JSON.stringify(journal), false); }catch(e){}
+  saveToSupabase();
 }
 async function loadPhoto(id){
   if(photoCache[id]) return photoCache[id];
@@ -1757,6 +1899,9 @@ function go(view, param){
   location.hash = view === 'section' ? ('#/section/'+param) : ('#/'+view);
 }
 function routeFromHash(){
+  if(location.hash.indexOf('access_token')>-1 || location.hash.indexOf('error_description')>-1){
+    return; // Supabase está procesando el login — el listener de auth se encarga de renderizar
+  }
   var h = location.hash.replace('#/', '');
   if(h.indexOf('section/') === 0){ go('section', h.split('/')[1]); }
   else if(h === 'full'){ go('full'); }
@@ -3359,6 +3504,13 @@ function clearMapFilter(){
   initSpotlight();
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
+
+  // registro de service worker — solo funciona cuando el sitio corre en su propio
+  // origen (por ejemplo GitHub Pages); dentro del entorno de Claude simplemente no
+  // se registra, y eso no rompe nada del resto del sitio.
+  if('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+    try{ navigator.serviceWorker.register('sw.js'); }catch(e){}
+  }
 })();
 
 </script>
