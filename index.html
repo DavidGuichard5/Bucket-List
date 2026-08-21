@@ -1476,7 +1476,7 @@ async function signInWithGitHub(){
   if(!supabaseClient){ alert('Falta configurar supabaseUrl y supabaseKey en el código.'); return; }
   await supabaseClient.auth.signInWithOAuth({
     provider: 'github',
-    options: { redirectTo: 'https://vercel.app' }
+    options: { redirectTo: 'https://bucket-list-git-main-david-guichard.vercel.app/#/landing' }
   });
 }
 async function signOutUser(){
